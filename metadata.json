@@ -1,0 +1,6 @@
+{
+  "name": "عبدو زين",
+  "description": "برنامج عبدو زين الجزائري لتسيير المبيعات، المشتريات، المخازن، نقاط البيع بالدينار الجزائري وتوليد وطباعة الباركود ومسح الباركود بكاميرا الهاتف.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
