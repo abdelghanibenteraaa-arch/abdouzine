@@ -10,13 +10,23 @@ import {
   Printer,
   CheckCircle2,
   Clock,
-  Ban
+  Ban,
+  RotateCcw,
+  Tag
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SaleInvoice } from '../types';
 
 export const SalesManager: React.FC = () => {
-  const { sales, formatCurrency, formatDate, setSelectedInvoice, setActiveTab } = useApp();
+  const {
+    sales,
+    formatCurrency,
+    formatDate,
+    setSelectedInvoice,
+    setActiveTab,
+    setIsPriceCheckOpen,
+    setIsCustomerReturnOpen
+  } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPaymentType, setFilterPaymentType] = useState<string>('all');
@@ -45,10 +55,26 @@ export const SalesManager: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('pos')}
-            className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>نقطة بيع جديدة (POS)</span>
+          </button>
+
+          <button
+            onClick={() => setIsCustomerReturnOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-rose-700 hover:bg-rose-800 text-white rounded text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>إرجاع واسترداد سلع الزبائن</span>
+          </button>
+
+          <button
+            onClick={() => setIsPriceCheckOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <Tag className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+            <span>معرفة السعر</span>
           </button>
         </div>
 

@@ -11,12 +11,21 @@ import {
   Calendar,
   Home,
   CheckCircle2,
-  PieChart
+  PieChart,
+  Tag,
+  Search
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const MainSalesMenu: React.FC = () => {
-  const { setActiveTab, financialSummary, sales, formatCurrency } = useApp();
+  const {
+    setActiveTab,
+    financialSummary,
+    sales,
+    formatCurrency,
+    setIsPriceCheckOpen,
+    setIsCustomerReturnOpen
+  } = useApp();
 
   const menuItems = [
     // Row 1
@@ -85,7 +94,7 @@ export const MainSalesMenu: React.FC = () => {
       textColor: 'text-white',
       badgeColor: 'bg-rose-700',
       icon: RotateCcw,
-      action: () => setActiveTab('sales')
+      action: () => setIsCustomerReturnOpen(true)
     },
     {
       id: 'supplier_returns',
@@ -233,6 +242,25 @@ export const MainSalesMenu: React.FC = () => {
                 </button>
               );
             })}
+          </div>
+
+          {/* Quick Action Bar for Price Check & Customer Returns */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setIsPriceCheckOpen(true)}
+              className="p-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border border-amber-400"
+            >
+              <Tag className="w-4 h-4 stroke-[2.5]" />
+              <span>معرفة سعر سلعة وبحث الكودبار (F2)</span>
+            </button>
+
+            <button
+              onClick={() => setIsCustomerReturnOpen(true)}
+              className="p-3 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border border-rose-500"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>إرجاع واسترداد سلع الزبائن (F3)</span>
+            </button>
           </div>
         </div>
 

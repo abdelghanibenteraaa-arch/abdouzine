@@ -110,6 +110,10 @@ interface AppContextType {
   setIsAddPaymentOpen: (open: boolean) => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
+  isPriceCheckOpen: boolean;
+  setIsPriceCheckOpen: (open: boolean) => void;
+  isCustomerReturnOpen: boolean;
+  setIsCustomerReturnOpen: (open: boolean) => void;
 }
 
 const defaultSettings: StoreSettings = {
@@ -454,6 +458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPriceCheckOpen, setIsPriceCheckOpen] = useState(false);
+  const [isCustomerReturnOpen, setIsCustomerReturnOpen] = useState(false);
 
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -755,6 +761,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAddPaymentOpen,
         isSettingsOpen,
         setIsSettingsOpen,
+        isPriceCheckOpen,
+        setIsPriceCheckOpen,
+        isCustomerReturnOpen,
+        setIsCustomerReturnOpen,
       }}
     >
       {children}

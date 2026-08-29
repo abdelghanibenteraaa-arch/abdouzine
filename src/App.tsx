@@ -25,11 +25,23 @@ import { AddSupplierModal } from './components/modals/AddSupplierModal';
 import { AddPaymentModal } from './components/modals/AddPaymentModal';
 import { AccountCreationModal } from './components/modals/AccountCreationModal';
 import { VideoTimelineGuideModal } from './components/modals/VideoTimelineGuideModal';
+import { PriceCheckModal } from './components/modals/PriceCheckModal';
+import { CustomerReturnModal } from './components/modals/CustomerReturnModal';
 
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { activeTab, toasts, removeToast, isVideoGuideOpen, setIsVideoGuideOpen } = useApp();
+  const {
+    activeTab,
+    toasts,
+    removeToast,
+    isVideoGuideOpen,
+    setIsVideoGuideOpen,
+    isPriceCheckOpen,
+    setIsPriceCheckOpen,
+    isCustomerReturnOpen,
+    setIsCustomerReturnOpen,
+  } = useApp();
 
   const renderActiveScreen = () => {
     switch (activeTab) {
@@ -123,6 +135,14 @@ const AppContent: React.FC = () => {
       <AddCustomerModal />
       <AddSupplierModal />
       <AddPaymentModal />
+      <PriceCheckModal
+        isOpen={isPriceCheckOpen}
+        onClose={() => setIsPriceCheckOpen(false)}
+      />
+      <CustomerReturnModal
+        isOpen={isCustomerReturnOpen}
+        onClose={() => setIsCustomerReturnOpen(false)}
+      />
       <VideoTimelineGuideModal
         isOpen={isVideoGuideOpen}
         onClose={() => setIsVideoGuideOpen(false)}

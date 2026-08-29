@@ -25,12 +25,15 @@ import {
   Monitor,
   CheckCircle2,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Tag
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, Customer, SaleItem, SaleInvoice } from '../types';
 import { api } from '../services/api';
 import { BarcodeScannerModal } from './modals/BarcodeScannerModal';
+import { PriceCheckModal } from './modals/PriceCheckModal';
+import { CustomerReturnModal } from './modals/CustomerReturnModal';
 
 interface HeldSale {
   id: string;
@@ -53,7 +56,11 @@ export const POSScreen: React.FC = () => {
     setSelectedInvoice,
     setIsAddCustomerOpen,
     setActiveTab,
-    sales
+    sales,
+    isPriceCheckOpen,
+    setIsPriceCheckOpen,
+    isCustomerReturnOpen,
+    setIsCustomerReturnOpen
   } = useApp();
 
   // Core Cart State
@@ -588,7 +595,13 @@ export const POSScreen: React.FC = () => {
         }
       }
 
-      if (e.key === 'F4') {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        setIsPriceCheckOpen(true);
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setIsCustomerReturnOpen(true);
+      } else if (e.key === 'F4') {
         e.preventDefault();
         handleExecuteSale();
       } else if (e.key === 'F5') {
@@ -637,10 +650,30 @@ export const POSScreen: React.FC = () => {
 
           <button
             onClick={() => setShowCatalogDrawer(!showCatalogDrawer)}
-            className="flex items-center gap-1.5 px-3 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-bold text-white transition-all"
+            className="flex items-center gap-1.5 px-3 py-1 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-bold text-white transition-all cursor-pointer"
           >
             <Package className="w-3.5 h-3.5 text-amber-400" />
             <span>{showCatalogDrawer ? 'إخفاء دليل الأصناف' : 'دليل الأصناف والكاتالوج'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsPriceCheckOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded text-xs font-black transition-all shadow-sm cursor-pointer"
+            title="معرفة السعر (اختصار F2)"
+          >
+            <Tag className="w-3.5 h-3.5 text-slate-900 stroke-[2.5]" />
+            <span>معرفة السعر</span>
+            <span className="text-[10px] bg-slate-900/20 px-1 py-0.2 rounded font-mono">F2</span>
+          </button>
+
+          <button
+            onClick={() => setIsCustomerReturnOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-black transition-all shadow-sm cursor-pointer"
+            title="إرجاع الزبون (اختصار F3)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-white" />
+            <span>إرجاع الزبون</span>
+            <span className="text-[10px] bg-black/20 px-1 py-0.2 rounded font-mono">F3</span>
           </button>
         </div>
 
@@ -857,6 +890,17 @@ export const POSScreen: React.FC = () => {
             className="h-12 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-400 active:border-slate-600 rounded-md font-black text-2xl flex items-center justify-center shadow-xs active:translate-y-0.5"
           >
             -
+          </button>
+
+          {/* معرفة السعر (F2) */}
+          <button
+            onClick={() => setIsPriceCheckOpen(true)}
+            title="معرفة السعر وبحث المنتجات (F2)"
+            className="h-13 bg-gradient-to-b from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 border-2 border-amber-600 rounded-md font-black text-xs flex flex-col items-center justify-center shadow-sm active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            <Tag className="w-4 h-4 stroke-[2.5] mb-0.5" />
+            <span className="leading-tight">معرفة السعر</span>
+            <span className="text-[9px] font-mono font-bold bg-slate-900/20 px-1 rounded">F2</span>
           </button>
 
           {/* اخرى [/] */}
@@ -1290,11 +1334,11 @@ export const POSScreen: React.FC = () => {
 
             {/* Button 4: Return (الإرجاع) */}
             <button
-              onClick={() => setIsReturnsModalOpen(true)}
-              title="إرجاع سلعة من زبون واسترداد المبلغ"
-              className="w-12 h-12 rounded-full bg-white hover:bg-neutral-100 border-2 border-neutral-300 text-slate-900 flex items-center justify-center shadow-md active:scale-95 transition-transform"
+              onClick={() => setIsCustomerReturnOpen(true)}
+              title="إرجاع واسترداد سلع الزبائن (F3)"
+              className="w-12 h-12 rounded-full bg-white hover:bg-neutral-100 border-2 border-neutral-300 text-slate-900 flex items-center justify-center shadow-md active:scale-95 transition-transform cursor-pointer"
             >
-              <RotateCcw className="w-6 h-6 text-blue-600" />
+              <RotateCcw className="w-6 h-6 text-rose-600" />
             </button>
 
             {/* Button 5: Print (طابعة) */}

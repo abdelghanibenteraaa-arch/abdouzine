@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Printer,
   X,
@@ -7,14 +7,28 @@ import {
   Building2,
   Phone,
   Calendar,
-  Share2
+  Share2,
+  ArrowRight,
+  Send,
+  Download
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { SaleInvoice, PurchaseInvoice } from '../../types';
 
 export const InvoiceViewModal: React.FC = () => {
-  const { selectedInvoice, setSelectedInvoice, settings, formatCurrency, formatDate } = useApp();
+  const { selectedInvoice, setSelectedInvoice, settings, formatCurrency, formatDate, addToast } = useApp();
   const [printFormat, setPrintFormat] = useState<'a4' | 'thermal'>('thermal');
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedInvoice(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setSelectedInvoice]);
 
   if (!selectedInvoice) return null;
 
@@ -25,46 +39,85 @@ export const InvoiceViewModal: React.FC = () => {
     window.print();
   };
 
+  const handleShareWhatsApp = () => {
+    const text = `فاتورة من ${settings.storeName}%0Aرقم الفاتورة: ${data.invoiceNumber}%0Aالتاريخ: ${data.date}%0Aالإجمالي: ${data.totalAmount} د.ج%0Aالمبلغ المدفوع: ${data.paidAmount} د.ج%0Aالمتبقي: ${data.remainingAmount} د.ج%0Aشكراً لزيارتكم!`;
+    const phone = (data.customerPhone || '').replace(/[^0-9]/g, '');
+    const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    window.open(url, '_blank');
+    addToast('تم فتح واتساب لمشاركة الفاتورة', 'info');
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
-        {/* Modal Controls Bar (Hidden in print) */}
-        <div className="no-print p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+    <div
+      onClick={(e) => {
+        // Close on clicking the backdrop outside the modal
+        if (e.target === e.currentTarget) {
+          setSelectedInvoice(null);
+        }
+      }}
+      className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in overflow-y-auto"
+    >
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto relative animate-in zoom-in-95 duration-150">
+        
+        {/* Floating Quick Close Button (Top-Left / Top-Right) */}
+        <button
+          id="btn-close-invoice-float"
+          type="button"
+          onClick={() => setSelectedInvoice(null)}
+          title="إغلاق الفاتورة (Esc)"
+          className="no-print absolute top-3 left-3 sm:top-4 sm:left-4 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center shadow-lg transition-transform cursor-pointer border-2 border-white"
+        >
+          <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+        </button>
+
+        {/* Modal Controls Top Bar (Hidden in print) */}
+        <div className="no-print p-3.5 sm:p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-700">نمط الطباعة:</span>
-            <div className="flex bg-slate-200/80 rounded-xl p-0.5">
-              <button
-                onClick={() => setPrintFormat('thermal')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                  printFormat === 'thermal' ? 'bg-white text-slate-800 shadow-2xs' : 'text-slate-600'
-                }`}
-              >
-                إيصال كاشير (80mm)
-              </button>
-              <button
-                onClick={() => setPrintFormat('a4')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                  printFormat === 'a4' ? 'bg-white text-slate-800 shadow-2xs' : 'text-slate-600'
-                }`}
-              >
-                فاتورة A4 قياسية
-              </button>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white leading-tight">
+                {isSale ? 'تم إتمام عملية البيع بنجاح' : 'سند استلام المشتريات'}
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono-numbers">
+                فاتورة رقم: {data.invoiceNumber}
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pr-10 sm:pr-0">
+            {/* Print Format Selector */}
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+              <button
+                type="button"
+                onClick={() => setPrintFormat('thermal')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  printFormat === 'thermal' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                إيصال 80mm
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintFormat('a4')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                  printFormat === 'a4' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                فاتورة A4
+              </button>
+            </div>
+
+            {/* Prominent Red Close Button in Top Bar */}
             <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm shadow-emerald-600/20"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة الفاتورة</span>
-            </button>
-            <button
+              id="btn-close-invoice-top"
+              type="button"
               onClick={() => setSelectedInvoice(null)}
-              className="p-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-black transition-all shadow-sm cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 stroke-[3]" />
+              <span className="hidden sm:inline">إغلاق (Esc)</span>
             </button>
           </div>
         </div>
@@ -72,7 +125,7 @@ export const InvoiceViewModal: React.FC = () => {
         {/* Printable Invoice Container */}
         <div
           id="printable-receipt"
-          className={`p-6 sm:p-8 bg-white text-slate-900 printable-area ${
+          className={`p-5 sm:p-8 bg-white text-slate-900 printable-area max-h-[70vh] overflow-y-auto ${
             printFormat === 'thermal' ? 'max-w-md mx-auto font-sans' : 'w-full'
           }`}
         >
@@ -93,7 +146,7 @@ export const InvoiceViewModal: React.FC = () => {
 
             <div className="pt-2">
               <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                {isSale ? 'فاتورة ضريبية مبسطة (مبيعات)' : 'سند استلام وتوريد بضاعة (مشتريات)'}
+                {isSale ? 'فاتورة بيع ونقطة الدفع' : 'سند استلام وتوريد بضاعة (مشتريات)'}
               </span>
             </div>
           </div>
@@ -110,7 +163,7 @@ export const InvoiceViewModal: React.FC = () => {
             </div>
 
             <div>
-              <span className="text-slate-500 block">{isSale ? 'العميل:' : 'المورد:'}</span>
+              <span className="text-slate-500 block">{isSale ? 'الزبون / العميل:' : 'المورد:'}</span>
               <strong className="text-slate-800">{isSale ? data.customerName : (data as any).supplierName}</strong>
             </div>
             <div className="text-left">
@@ -119,10 +172,10 @@ export const InvoiceViewModal: React.FC = () => {
                 {data.paymentType === 'cash'
                   ? 'نقدي'
                   : data.paymentType === 'card'
-                  ? 'بطاقة / مدى'
+                  ? 'بطاقة بنكية'
                   : data.paymentType === 'bank_transfer'
                   ? 'تحويل بنكي'
-                  : 'آجل / ذمة'}
+                  : 'آجل / كريدي'}
               </strong>
             </div>
           </div>
@@ -132,7 +185,7 @@ export const InvoiceViewModal: React.FC = () => {
             <table className="w-full text-xs text-right">
               <thead>
                 <tr className="border-b border-slate-300 text-slate-600">
-                  <th className="pb-1.5">الصنف</th>
+                  <th className="pb-1.5">السلعة</th>
                   <th className="pb-1.5 text-center">الكمية</th>
                   <th className="pb-1.5 text-left">السعر</th>
                   <th className="pb-1.5 text-left">الإجمالي</th>
@@ -147,10 +200,10 @@ export const InvoiceViewModal: React.FC = () => {
                     </td>
                     <td className="py-2 text-center font-bold font-mono-numbers">{item.quantity}</td>
                     <td className="py-2 text-left font-mono-numbers">
-                      {item.unitPrice || item.unitCost}
+                      {formatCurrency(item.unitPrice || item.unitCost)}
                     </td>
                     <td className="py-2 text-left font-bold font-mono-numbers text-slate-900">
-                      {item.total}
+                      {formatCurrency(item.total)}
                     </td>
                   </tr>
                 ))}
@@ -180,18 +233,18 @@ export const InvoiceViewModal: React.FC = () => {
             )}
 
             <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
-              <span>المبلغ الإجمالي شامل الضريبة:</span>
-              <span className="font-mono-numbers text-base">{formatCurrency(data.totalAmount)}</span>
+              <span>المبلغ الإجمالي:</span>
+              <span className="font-mono-numbers text-base text-blue-700">{formatCurrency(data.totalAmount)}</span>
             </div>
 
             <div className="flex justify-between text-slate-700 pt-1">
-              <span>المبلغ المسدد:</span>
+              <span>المبلغ المدفوع:</span>
               <span className="font-mono-numbers font-bold text-emerald-700">{formatCurrency(data.paidAmount)}</span>
             </div>
 
             {data.remainingAmount > 0 && (
               <div className="flex justify-between text-rose-600 font-bold">
-                <span>المبلغ المتبقي (آجل):</span>
+                <span>المبلغ المتبقي (دين / كريدي):</span>
                 <span className="font-mono-numbers">{formatCurrency(data.remainingAmount)}</span>
               </div>
             )}
@@ -199,14 +252,11 @@ export const InvoiceViewModal: React.FC = () => {
 
           {/* QR Code & Footer */}
           <div className="mt-6 pt-4 border-t border-dashed border-slate-300 text-center space-y-2">
-            {/* Simulated QR Code box */}
-            <div className="w-24 h-24 mx-auto p-1.5 border-2 border-slate-900 rounded-lg flex items-center justify-center bg-white shadow-2xs">
-              <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white text-[9px] font-mono leading-tight">
-                <QrCode className="w-16 h-16 text-white" />
-              </div>
+            <div className="w-20 h-20 mx-auto p-1.5 border-2 border-slate-900 rounded-lg flex items-center justify-center bg-white shadow-2xs">
+              <QrCode className="w-14 h-14 text-slate-900" />
             </div>
             <p className="text-[10px] text-slate-400 font-mono">
-              رمز الاستجابة السريع للتحقق الضريبي (ZATCA / Tax QR)
+              فاتورة عبدو زين الإلكترونية • Zin Stock
             </p>
 
             {settings.invoiceFooterNote && (
@@ -216,6 +266,43 @@ export const InvoiceViewModal: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Modal Bottom Footer Actions Bar (Close X, Print, Share) */}
+        <div className="no-print p-3 sm:p-4 bg-slate-100 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          {/* Main Big Red Close Button */}
+          <button
+            id="btn-close-invoice-bottom"
+            type="button"
+            onClick={() => setSelectedInvoice(null)}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs sm:text-sm font-black transition-all shadow-md cursor-pointer"
+          >
+            <X className="w-5 h-5 stroke-[3]" />
+            <span>إغلاق الفاتورة (X) والعودة للبيع</span>
+          </button>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Share to WhatsApp button for phone / cashier */}
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>إرسال واتساب</span>
+            </button>
+
+            {/* Print Button */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة 🖨️</span>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

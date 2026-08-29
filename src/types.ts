@@ -67,6 +67,36 @@ export interface Supplier {
   createdAt: string;
 }
 
+export interface CustomerReturnItem {
+  productId: string;
+  productName: string;
+  sku?: string;
+  barcode?: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  condition: 'good' | 'damaged' | 'defective'; // سليم يعاد للمخزن أو تالف
+  reason?: string;
+}
+
+export interface CustomerReturn {
+  id: string;
+  returnNumber: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string;
+  date: string;
+  items: CustomerReturnItem[];
+  totalRefund: number;
+  refundMethod: 'cash' | 'deduct_debt' | 'credit_note';
+  restockItems: boolean; // إعادة السلع للمخزون السليم
+  notes?: string;
+  cashierName?: string;
+  createdAt: string;
+}
+
 export interface SupplierReturnItem {
   productId: string;
   productName: string;
