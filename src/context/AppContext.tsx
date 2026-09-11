@@ -15,6 +15,7 @@ import {
   UserProfile
 } from '../types';
 import { api } from '../services/api';
+import { getTranslation, TranslationKey, Language } from '../i18n/translations';
 
 export type NavTab =
   | 'dashboard'
@@ -70,6 +71,8 @@ interface AppContextType {
   // Language & Screen Mode
   language: 'ar' | 'fr';
   setLanguage: (lang: 'ar' | 'fr') => void;
+  toggleLanguage: () => void;
+  t: (key: TranslationKey) => string;
   screenMode: 'standard' | 'touch' | 'compact';
   setScreenMode: (mode: 'standard' | 'touch' | 'compact') => void;
 
@@ -102,6 +105,11 @@ interface AppContextType {
   // Quick Action Modal states
   isAddProductOpen: boolean;
   setIsAddProductOpen: (open: boolean) => void;
+  productDraft: { barcode?: string; name?: string } | null;
+  setProductDraft: (draft: { barcode?: string; name?: string } | null) => void;
+  openAddProductWithDraft: (draft?: { barcode?: string; name?: string }) => void;
+  isAddSaleInvoiceOpen: boolean;
+  setIsAddSaleInvoiceOpen: (open: boolean) => void;
   isAddCustomerOpen: boolean;
   setIsAddCustomerOpen: (open: boolean) => void;
   isAddSupplierOpen: boolean;
@@ -114,6 +122,8 @@ interface AppContextType {
   setIsPriceCheckOpen: (open: boolean) => void;
   isCustomerReturnOpen: boolean;
   setIsCustomerReturnOpen: (open: boolean) => void;
+  isAndroidModalOpen: boolean;
+  setIsAndroidModalOpen: (open: boolean) => void;
 }
 
 const defaultSettings: StoreSettings = {
@@ -314,8 +324,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLanguageState(lang);
     try {
       localStorage.setItem('zin_lang', lang);
+      if (typeof document !== 'undefined') {
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.lang = lang;
+      }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+      document.documentElement.lang = language;
+    }
+  }, [language]);
+
+  const toggleLanguage = useCallback(() => {
+    const nextLang = language === 'ar' ? 'fr' : 'ar';
+    setLanguage(nextLang);
+  }, [language, setLanguage]);
+
+  const t = useCallback((key: TranslationKey) => {
+    return getTranslation(key, language);
+  }, [language]);
 
   const setScreenMode = useCallback((mode: 'standard' | 'touch' | 'compact') => {
     setScreenModeState(mode);
@@ -454,12 +484,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedInvoice, setSelectedInvoice] = useState<{ type: 'sale' | 'purchase'; data: SaleInvoice | PurchaseInvoice } | null>(null);
   const [adjustStockProduct, setAdjustStockProduct] = useState<Product | null>(null);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [productDraft, setProductDraft] = useState<{ barcode?: string; name?: string } | null>(null);
+  const [isAddSaleInvoiceOpen, setIsAddSaleInvoiceOpen] = useState(false);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPriceCheckOpen, setIsPriceCheckOpen] = useState(false);
   const [isCustomerReturnOpen, setIsCustomerReturnOpen] = useState(false);
+  const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
+
+  const openAddProductWithDraft = useCallback((draft?: { barcode?: string; name?: string }) => {
+    if (draft) {
+      setProductDraft(draft);
+    }
+    setIsAddProductOpen(true);
+  }, []);
 
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -735,6 +775,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         language,
         setLanguage,
+        toggleLanguage,
+        t,
         screenMode,
         setScreenMode,
         expenses,
@@ -753,6 +795,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAdjustStockProduct,
         isAddProductOpen,
         setIsAddProductOpen,
+        productDraft,
+        setProductDraft,
+        openAddProductWithDraft,
+        isAddSaleInvoiceOpen,
+        setIsAddSaleInvoiceOpen,
         isAddCustomerOpen,
         setIsAddCustomerOpen,
         isAddSupplierOpen,
@@ -765,6 +812,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsPriceCheckOpen,
         isCustomerReturnOpen,
         setIsCustomerReturnOpen,
+        isAndroidModalOpen,
+        setIsAndroidModalOpen,
       }}
     >
       {children}

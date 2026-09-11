@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
@@ -27,6 +27,8 @@ import { AccountCreationModal } from './components/modals/AccountCreationModal';
 import { VideoTimelineGuideModal } from './components/modals/VideoTimelineGuideModal';
 import { PriceCheckModal } from './components/modals/PriceCheckModal';
 import { CustomerReturnModal } from './components/modals/CustomerReturnModal';
+import { AndroidInstallModal } from './components/modals/AndroidInstallModal';
+import { AddSaleInvoiceModal } from './components/modals/AddSaleInvoiceModal';
 
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -35,13 +37,31 @@ const AppContent: React.FC = () => {
     activeTab,
     toasts,
     removeToast,
+    language,
     isVideoGuideOpen,
     setIsVideoGuideOpen,
     isPriceCheckOpen,
     setIsPriceCheckOpen,
     isCustomerReturnOpen,
     setIsCustomerReturnOpen,
+    isAndroidModalOpen,
+    setIsAndroidModalOpen,
+    setIsAddProductOpen,
+    isAddSaleInvoiceOpen,
+    setIsAddSaleInvoiceOpen,
   } = useApp();
+
+  // Global F1 Hotkey Listener to add new product
+  useEffect(() => {
+    const handleGlobalF1 = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setIsAddProductOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalF1);
+    return () => window.removeEventListener('keydown', handleGlobalF1);
+  }, [setIsAddProductOpen]);
 
   const renderActiveScreen = () => {
     switch (activeTab) {
@@ -75,12 +95,15 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#f4f5f7] overflow-hidden font-sans text-slate-900 antialiased select-none" dir="rtl">
+    <div
+      className="flex flex-col h-screen bg-[#f4f5f7] overflow-hidden font-sans text-slate-900 antialiased select-none"
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
+    >
       
       {/* Top Navbar Ribbon */}
       <Navbar />
 
-      {/* Main Center Body with Right Sidebar */}
+      {/* Main Center Body with Right/Left Sidebar according to language */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         
         {/* Dynamic Screen View (Center Canvas) */}
@@ -88,7 +111,7 @@ const AppContent: React.FC = () => {
           {renderActiveScreen()}
         </main>
 
-        {/* Navigation Sidebar on the RIGHT (as in Zin Stock screenshot) */}
+        {/* Navigation Sidebar */}
         <Sidebar />
       </div>
 
@@ -96,7 +119,7 @@ const AppContent: React.FC = () => {
       <WindowsTaskbar />
 
       {/* Global Toast Notifications */}
-      <div className="fixed bottom-12 left-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+      <div className={`fixed bottom-12 z-50 flex flex-col gap-2 max-w-sm pointer-events-none ${language === 'ar' ? 'left-5' : 'right-5'}`}>
         {toasts.map(toast => (
           <div
             key={toast.id}
@@ -119,7 +142,7 @@ const AppContent: React.FC = () => {
             </div>
             <button
               onClick={() => removeToast(toast.id)}
-              className="p-1 hover:opacity-80 rounded text-white/70"
+              className="p-1 hover:opacity-80 rounded text-white/70 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -135,6 +158,10 @@ const AppContent: React.FC = () => {
       <AddCustomerModal />
       <AddSupplierModal />
       <AddPaymentModal />
+      <AddSaleInvoiceModal
+        isOpen={isAddSaleInvoiceOpen}
+        onClose={() => setIsAddSaleInvoiceOpen(false)}
+      />
       <PriceCheckModal
         isOpen={isPriceCheckOpen}
         onClose={() => setIsPriceCheckOpen(false)}
@@ -146,6 +173,10 @@ const AppContent: React.FC = () => {
       <VideoTimelineGuideModal
         isOpen={isVideoGuideOpen}
         onClose={() => setIsVideoGuideOpen(false)}
+      />
+      <AndroidInstallModal
+        isOpen={isAndroidModalOpen}
+        onClose={() => setIsAndroidModalOpen(false)}
       />
     </div>
   );

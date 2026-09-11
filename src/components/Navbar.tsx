@@ -15,7 +15,8 @@ import {
   Home,
   ShoppingBag,
   Plus,
-  Sparkles
+  Sparkles,
+  Smartphone
 } from 'lucide-react';
 import { useApp, NavTab } from '../context/AppContext';
 
@@ -26,7 +27,8 @@ export const Navbar: React.FC = () => {
     activeTab,
     setActiveTab,
     setIsAddProductOpen,
-    setIsVideoGuideOpen
+    setIsVideoGuideOpen,
+    setIsAndroidModalOpen
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -159,6 +161,18 @@ export const Navbar: React.FC = () => {
 
       {/* RIGHT: "عبدو زين ستوك" Logo with Shopping Bag, Video Guide, and Offline status */}
       <div className="flex items-center gap-2">
+        {/* Android App Button */}
+        <button
+          type="button"
+          onClick={() => setIsAndroidModalOpen(true)}
+          className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-lg text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95"
+          title="تحميل وتثبيت التطبيق على هاتف أندرويد (Android App)"
+        >
+          <Smartphone className="w-3.5 h-3.5 text-emerald-200" />
+          <span className="hidden sm:inline">تطبيق أندرويد 📱</span>
+          <span className="sm:hidden">أندرويد</span>
+        </button>
+
         {/* 11-Command Video Guide Button */}
         <button
           type="button"

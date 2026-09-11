@@ -9,12 +9,13 @@ import {
   Coins,
   Wrench,
   Navigation,
-  User
+  User,
+  Smartphone
 } from 'lucide-react';
 import { useApp, NavTab } from '../context/AppContext';
 
 export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, financialSummary, dbStats, currentUser, setIsAuthModalOpen, logout } = useApp();
+  const { activeTab, setActiveTab, financialSummary, dbStats, currentUser, setIsAuthModalOpen, setIsAndroidModalOpen, logout } = useApp();
 
   const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }[] = [
     {
@@ -90,6 +91,19 @@ export const Sidebar: React.FC = () => {
             );
           })}
         </nav>
+
+        {/* Android App Quick Action */}
+        <div className="p-1 mt-1">
+          <button
+            type="button"
+            onClick={() => setIsAndroidModalOpen(true)}
+            className="w-full py-2 px-0.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-md flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-md transition-all active:scale-95"
+            title="تثبيت التطبيق على هاتف أندرويد"
+          >
+            <Smartphone className="w-4 h-4 text-emerald-200" />
+            <span className="text-[9px] font-black leading-tight text-center">تطبيق الهاتف</span>
+          </button>
+        </div>
       </div>
 
       {/* Bottom Footer (الملف / 2026 / تسجيل الخروج) */}

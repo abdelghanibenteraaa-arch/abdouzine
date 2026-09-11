@@ -60,7 +60,8 @@ export const POSScreen: React.FC = () => {
     isPriceCheckOpen,
     setIsPriceCheckOpen,
     isCustomerReturnOpen,
-    setIsCustomerReturnOpen
+    setIsCustomerReturnOpen,
+    setIsAddProductOpen
   } = useApp();
 
   // Core Cart State
@@ -85,11 +86,20 @@ export const POSScreen: React.FC = () => {
   // Modals for Zin Stock features
   const [isScaleModalOpen, setIsScaleModalOpen] = useState<boolean>(false);
   const [scaleWeight, setScaleWeight] = useState<string>('1.000');
+  // Pack / Colisage State (إضافة حزمة / كرتون)
   const [isPackModalOpen, setIsPackModalOpen] = useState<boolean>(false);
-  const [packQuantity, setPackQuantity] = useState<number>(6);
+  const [packSelectedProductId, setPackSelectedProductId] = useState<string>('');
+  const [packProductSearch, setPackProductSearch] = useState<string>('');
+  const [packNumberOfPacks, setPackNumberOfPacks] = useState<number>(1);
+  const [packUnitsPerPack, setPackUnitsPerPack] = useState<number>(12);
+  const [packCustomPrice, setPackCustomPrice] = useState<string>('');
+  const [packApplyMode, setPackApplyMode] = useState<'new_item' | 'update_selected'>('new_item');
   const [isOtherModalOpen, setIsOtherModalOpen] = useState<boolean>(false);
-  const [customQtyInput, setCustomQtyInput] = useState<string>('');
+  const [customQtyInput, setCustomQtyInput] = useState<string>('1');
   const [customPriceInput, setCustomPriceInput] = useState<string>('');
+  const [customNameInput, setCustomNameInput] = useState<string>('سلعة غير مسجلة');
+  const [customCostInput, setCustomCostInput] = useState<string>('');
+  const [customMode, setCustomMode] = useState<'new' | 'edit'>('new');
   const [isDamagedGoodsModalOpen, setIsDamagedGoodsModalOpen] = useState<boolean>(false);
   const [damagedNotes, setDamagedNotes] = useState<string>('');
   const [isRecentSalesModalOpen, setIsRecentSalesModalOpen] = useState<boolean>(false);
@@ -202,6 +212,21 @@ export const POSScreen: React.FC = () => {
 
   // Handle keyboard navigation inside search query
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Intercept / or NumpadDivide in search field to open unrecorded price modal
+    if (e.key === '/' || e.code === 'NumpadDivide') {
+      e.preventDefault();
+      const prefilled = searchQuery.replace(/\//g, '').trim();
+      setSearchQuery('');
+      setCustomMode('new');
+      setCustomPriceInput(prefilled);
+      setCustomNameInput('سلعة غير مسجلة');
+      setCustomQtyInput('1');
+      setCustomCostInput('');
+      setIsSuggestOpen(false);
+      setIsOtherModalOpen(true);
+      return;
+    }
+
     if (liveMatchedProducts.length > 0 && isSuggestOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -228,6 +253,20 @@ export const POSScreen: React.FC = () => {
     const query = searchQuery.trim();
     if (!query) return;
 
+    // Check if query is slash or ends with slash -> unrecorded price
+    if (query === '/' || query.endsWith('/')) {
+      const prefilled = query.replace(/\//g, '').trim();
+      setSearchQuery('');
+      setCustomMode('new');
+      setCustomPriceInput(prefilled);
+      setCustomNameInput('سلعة غير مسجلة');
+      setCustomQtyInput('1');
+      setCustomCostInput('');
+      setIsSuggestOpen(false);
+      setIsOtherModalOpen(true);
+      return;
+    }
+
     // If suggestion is active and user pressed Enter
     if (liveMatchedProducts.length > 0 && isSuggestOpen) {
       const targetProd = liveMatchedProducts[selectedSuggestIndex] || liveMatchedProducts[0];
@@ -248,6 +287,38 @@ export const POSScreen: React.FC = () => {
     if (matchedByBarcode) {
       addProductToCart(matchedByBarcode);
       setIsSuggestOpen(false);
+      return;
+    }
+
+    // Check exact pack barcode match (باركود الحزمة / الكرتون)
+    const matchedByPackBarcode = products.find(
+      p => p.packBarcode && p.packBarcode.trim().toLowerCase() === query.toLowerCase()
+    );
+    if (matchedByPackBarcode) {
+      const pUnits = matchedByPackBarcode.boxQuantity || 12;
+      const pPrice = matchedByPackBarcode.packPrice || Number((pUnits * (matchedByPackBarcode.wholesalePrice || matchedByPackBarcode.sellPrice)).toFixed(2));
+      const unitPriceCalc = Number((pPrice / pUnits).toFixed(2));
+      const newItem: SaleItem = {
+        id: 'item-pack-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        productId: matchedByPackBarcode.id,
+        productName: `${matchedByPackBarcode.name} [حزمة ${pUnits} قطع]`,
+        sku: matchedByPackBarcode.sku,
+        barcode: matchedByPackBarcode.packBarcode || matchedByPackBarcode.barcode,
+        quantity: pUnits,
+        unitPrice: unitPriceCalc,
+        costPrice: matchedByPackBarcode.costPrice,
+        discount: 0,
+        total: pPrice,
+        profit: Number(((unitPriceCalc - matchedByPackBarcode.costPrice) * pUnits).toFixed(2)),
+        isPack: true,
+        packSize: pUnits,
+        numberOfPacks: 1,
+      };
+      setCart(prev => [...prev, newItem]);
+      setSelectedRowIndex(cart.length);
+      setIsSuggestOpen(false);
+      setSearchQuery('');
+      addToast(`📦 تم مسح باركود الكرتون وإضافة حزمة كاملة (${pUnits} قطع) لـ ${matchedByPackBarcode.name}`, 'success');
       return;
     }
 
@@ -348,10 +419,15 @@ export const POSScreen: React.FC = () => {
     }
   };
 
-  // Hold current ticket (قائمة الإنتظار)
+  // Hold current ticket (وضع الزبون على قائمة الإنتظار - F8)
   const handleHoldCurrentSale = () => {
     if (cart.length === 0) {
-      addToast('السلة فارغة، لا يمكن تعليق وصل فارغ', 'warning');
+      if (heldSales.length > 0) {
+        setIsQueueModalOpen(true);
+        addToast('تم فتح قائمة الإنتظار لاسترجاع وصل معلق [F8]', 'info');
+      } else {
+        addToast('السلة فارغة، لا يمكن وضع زبون بدون مشتريات في قائمة الإنتظار [F8]', 'warning');
+      }
       return;
     }
 
@@ -370,7 +446,7 @@ export const POSScreen: React.FC = () => {
     setSelectedRowIndex(null);
     setDiscountAmount(0);
     setPaidAmount(0);
-    addToast('تم نقل الوصل إلى قائمة الإنتظار بنجاح 🕒', 'success');
+    addToast(`🕒 تم وضع الزبون (${newHeldSale.customerName}) على قائمة الإنتظار بنجاح [F8]`, 'success');
   };
 
   // Restore ticket from waitlist
@@ -415,65 +491,175 @@ export const POSScreen: React.FC = () => {
     }
   };
 
-  // Handle Pack / Colisage (الحزمة)
-  const handleApplyPackQuantity = () => {
+  // Open Pack / Colisage modal with intelligent pre-fill
+  const handleOpenPackModal = () => {
+    let initialProduct: Product | undefined;
     if (selectedRowIndex !== null && cart[selectedRowIndex]) {
+      const selectedItem = cart[selectedRowIndex];
+      initialProduct = products.find(p => p.id === selectedItem.productId);
+      setPackApplyMode('update_selected');
+    } else {
+      initialProduct = products.length > 0 ? products[0] : undefined;
+      setPackApplyMode('new_item');
+    }
+
+    if (initialProduct) {
+      setPackSelectedProductId(initialProduct.id);
+      const units = initialProduct.boxQuantity || 12;
+      setPackUnitsPerPack(units);
+      setPackNumberOfPacks(1);
+      const defaultPackPrice = initialProduct.packPrice
+        ? initialProduct.packPrice
+        : Number((units * (initialProduct.wholesalePrice || initialProduct.sellPrice)).toFixed(2));
+      setPackCustomPrice(String(defaultPackPrice));
+    } else {
+      setPackSelectedProductId('');
+      setPackUnitsPerPack(12);
+      setPackNumberOfPacks(1);
+      setPackCustomPrice('');
+    }
+    setPackProductSearch('');
+    setIsPackModalOpen(true);
+  };
+
+  // Change product inside pack modal
+  const handleSelectProductForPack = (prod: Product) => {
+    setPackSelectedProductId(prod.id);
+    const units = prod.boxQuantity || 12;
+    setPackUnitsPerPack(units);
+    const defaultPackPrice = prod.packPrice
+      ? prod.packPrice
+      : Number((units * (prod.wholesalePrice || prod.sellPrice)).toFixed(2));
+    setPackCustomPrice(String(defaultPackPrice));
+  };
+
+  // Confirm pack sale (add or update)
+  const handleConfirmPackSale = () => {
+    const selectedProd = products.find(p => p.id === packSelectedProductId);
+    if (!selectedProd) {
+      addToast('يرجى اختيار سلعة لتطبيق الحزمة عليها', 'warning');
+      return;
+    }
+
+    const numPacks = Math.max(1, Number(packNumberOfPacks) || 1);
+    const unitsPerPack = Math.max(1, Number(packUnitsPerPack) || 1);
+    const totalUnits = numPacks * unitsPerPack;
+
+    // Price per pack
+    const userPrice = parseFloat(packCustomPrice);
+    const pricePerPack = !isNaN(userPrice) && userPrice > 0
+      ? userPrice
+      : (selectedProd.packPrice || Number((unitsPerPack * (selectedProd.wholesalePrice || selectedProd.sellPrice)).toFixed(2)));
+
+    const totalPackCost = Number((pricePerPack * numPacks).toFixed(2));
+    const unitPriceCalc = Number((totalPackCost / totalUnits).toFixed(2));
+
+    if (packApplyMode === 'update_selected' && selectedRowIndex !== null && cart[selectedRowIndex]) {
+      const curItem = cart[selectedRowIndex];
+      setCart(prev => {
+        const updated = [...prev];
+        updated[selectedRowIndex] = {
+          ...curItem,
+          productName: `${selectedProd.name} [حزمة ${unitsPerPack} قطع × ${numPacks}]`,
+          quantity: totalUnits,
+          unitPrice: unitPriceCalc,
+          total: totalPackCost,
+          profit: Number(((unitPriceCalc - curItem.costPrice) * totalUnits - curItem.discount).toFixed(2)),
+          isPack: true,
+          packSize: unitsPerPack,
+          numberOfPacks: numPacks,
+        };
+        return updated;
+      });
+      addToast(`✅ تم تحديث الصنف المحدد إلى حزمة (${numPacks} كرتون = ${totalUnits} قطعة)`, 'success');
+    } else {
+      // Add as new item in cart
+      const newItem: SaleItem = {
+        id: 'item-pack-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        productId: selectedProd.id,
+        productName: `${selectedProd.name} [حزمة ${unitsPerPack} قطع × ${numPacks}]`,
+        sku: selectedProd.sku,
+        barcode: selectedProd.packBarcode || selectedProd.barcode,
+        quantity: totalUnits,
+        unitPrice: unitPriceCalc,
+        costPrice: selectedProd.costPrice,
+        discount: 0,
+        total: totalPackCost,
+        profit: Number(((unitPriceCalc - selectedProd.costPrice) * totalUnits).toFixed(2)),
+        isPack: true,
+        packSize: unitsPerPack,
+        numberOfPacks: numPacks,
+      };
+
+      setCart(prev => [...prev, newItem]);
+      setSelectedRowIndex(cart.length);
+      addToast(`📦 تمت إضافة حزمة: ${selectedProd.name} (${numPacks} كرتون = ${totalUnits} قطعة) بقيمة ${formatCurrency(totalPackCost)}`, 'success');
+    }
+
+    setIsPackModalOpen(false);
+    barcodeInputRef.current?.focus();
+  };
+
+  // Handle Custom Price / Quantity Modal (سعر غير مسجل [/])
+  const handleApplyCustomOther = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const priceNum = parseFloat(customPriceInput);
+    if (isNaN(priceNum) || priceNum < 0) {
+      addToast('يرجى إدخال سعر بيع صحيح (د.ج)', 'warning');
+      return;
+    }
+
+    const qtyNum = parseFloat(customQtyInput) || 1;
+    if (qtyNum <= 0) {
+      addToast('يرجى إدخال كمية صحيحة أكبر من 0', 'warning');
+      return;
+    }
+
+    // If editing currently selected item
+    if (customMode === 'edit' && selectedRowIndex !== null && cart[selectedRowIndex]) {
       const item = cart[selectedRowIndex];
-      const newQty = Number((item.quantity * packQuantity).toFixed(3));
       setCart(prev => {
         const updated = [...prev];
         updated[selectedRowIndex] = {
           ...item,
-          quantity: newQty,
-          total: Number((newQty * item.unitPrice - item.discount).toFixed(2)),
-          profit: Number(((item.unitPrice - item.costPrice) * newQty - item.discount).toFixed(2)),
+          quantity: qtyNum,
+          unitPrice: priceNum,
+          total: Number((qtyNum * priceNum - item.discount).toFixed(2)),
+          profit: Number(((priceNum - item.costPrice) * qtyNum - item.discount).toFixed(2)),
         };
         return updated;
       });
-      addToast(`تم تطبيق حزمة (${packQuantity} قطع) على الصنف`, 'success');
-      setIsPackModalOpen(false);
+      addToast(`تم تحديث الصنف (${item.productName}) بالسعر والكمية الجديدة`, 'success');
     } else {
-      addToast('يرجى تحديد صنف لتطبيق مضاعفة الحزمة عليه', 'warning');
-    }
-  };
-
-  // Handle Custom Price / Quantity Modal (اخرى [/])
-  const handleApplyCustomOther = () => {
-    if (selectedRowIndex === null || !cart[selectedRowIndex]) {
-      addToast('يرجى تحديد صنف أولاً', 'warning');
-      return;
-    }
-
-    const item = cart[selectedRowIndex];
-    let newQty = item.quantity;
-    let newPrice = item.unitPrice;
-
-    if (customQtyInput.trim()) {
-      const parsedQty = parseFloat(customQtyInput);
-      if (!isNaN(parsedQty) && parsedQty > 0) newQty = parsedQty;
-    }
-
-    if (customPriceInput.trim()) {
-      const parsedPrice = parseFloat(customPriceInput);
-      if (!isNaN(parsedPrice) && parsedPrice >= 0) newPrice = parsedPrice;
-    }
-
-    setCart(prev => {
-      const updated = [...prev];
-      updated[selectedRowIndex] = {
-        ...item,
-        quantity: newQty,
-        unitPrice: newPrice,
-        total: Number((newQty * newPrice - item.discount).toFixed(2)),
-        profit: Number(((newPrice - item.costPrice) * newQty - item.discount).toFixed(2)),
+      // Adding unrecorded price item to sales list!
+      const itemName = customNameInput.trim() || 'سلعة بسعر غير مسجل';
+      const costNum = parseFloat(customCostInput) || Number((priceNum * 0.8).toFixed(2));
+      const newItem: SaleItem = {
+        id: 'item-' + Date.now(),
+        productId: 'custom-' + Date.now(),
+        productName: itemName,
+        sku: 'DIV-' + Math.floor(Math.random() * 9000 + 1000),
+        barcode: '',
+        quantity: qtyNum,
+        unitPrice: priceNum,
+        costPrice: costNum,
+        total: Number((qtyNum * priceNum).toFixed(2)),
+        discount: 0,
+        profit: Number(((priceNum - costNum) * qtyNum).toFixed(2)),
       };
-      return updated;
-    });
+
+      setCart(prev => [...prev, newItem]);
+      setSelectedRowIndex(cart.length);
+      addToast(`✅ تمت إضافة ${itemName} بسعر ${formatCurrency(priceNum)} لقائمة المبيعات [/]`, 'success');
+    }
 
     setIsOtherModalOpen(false);
-    setCustomQtyInput('');
     setCustomPriceInput('');
-    addToast('تم تحديث بيانات الصنف المحدد', 'success');
+    setCustomNameInput('سلعة غير مسجلة');
+    setCustomQtyInput('1');
+    setCustomCostInput('');
+    barcodeInputRef.current?.focus();
   };
 
   // Record damaged goods (بضاعة تالفة)
@@ -574,6 +760,23 @@ export const POSScreen: React.FC = () => {
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
 
+      // Intercept / or NumpadDivide for unrecorded price (سعر غير مسجل)
+      if (e.key === '/' || e.code === 'NumpadDivide') {
+        if (!isInput || (target === barcodeInputRef.current && (searchQuery.trim() === '' || searchQuery.trim() === '/'))) {
+          e.preventDefault();
+          const prefilled = searchQuery.replace(/\//g, '').trim();
+          setSearchQuery('');
+          setCustomMode('new');
+          setCustomPriceInput(prefilled);
+          setCustomNameInput('سلعة غير مسجلة');
+          setCustomQtyInput('1');
+          setCustomCostInput('');
+          setIsSuggestOpen(false);
+          setIsOtherModalOpen(true);
+          return;
+        }
+      }
+
       // Intercept + and - when outside text inputs OR when barcode input is active but empty
       if (e.key === '+' || e.code === 'NumpadAdd' || (e.key === '=' && e.shiftKey)) {
         if (!isInput || (target === barcodeInputRef.current && searchQuery.trim() === '')) {
@@ -595,7 +798,11 @@ export const POSScreen: React.FC = () => {
         }
       }
 
-      if (e.key === 'F2') {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setIsAddProductOpen(true);
+        return;
+      } else if (e.key === 'F2') {
         e.preventDefault();
         setIsPriceCheckOpen(true);
       } else if (e.key === 'F3') {
@@ -619,12 +826,15 @@ export const POSScreen: React.FC = () => {
         e.preventDefault();
         setPaymentType('cash');
         handleExecuteSale('cash');
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        handleHoldCurrentSale();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, grandTotal, selectedCustomerId, printFormat, sales, searchQuery, selectedRowIndex]);
+  }, [cart, grandTotal, selectedCustomerId, printFormat, sales, searchQuery, selectedRowIndex, heldSales, customers, setIsAddProductOpen]);
 
   const filteredCatalogProducts = products.filter(p => {
     if (!p.isActive) return false;
@@ -632,6 +842,20 @@ export const POSScreen: React.FC = () => {
     const matchSearch = !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery);
     return matchCat && matchSearch;
   });
+
+  const packFilteredProducts = React.useMemo(() => {
+    if (!packProductSearch.trim()) return products.filter(p => p.isActive).slice(0, 20);
+    const q = packProductSearch.trim().toLowerCase();
+    return products.filter(p => {
+      if (!p.isActive) return false;
+      return p.name.toLowerCase().includes(q) ||
+             p.barcode.toLowerCase().includes(q) ||
+             (p.packBarcode && p.packBarcode.toLowerCase().includes(q)) ||
+             p.sku?.toLowerCase().includes(q);
+    }).slice(0, 20);
+  }, [products, packProductSearch]);
+
+  const currentPackProduct = products.find(p => p.id === packSelectedProductId);
 
   return (
     <div className="h-full flex flex-col bg-[#e3e6eb] select-none text-slate-800 overflow-hidden font-sans">
@@ -657,6 +881,16 @@ export const POSScreen: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setIsAddProductOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-black transition-all shadow-sm cursor-pointer"
+            title="إضافة منتج جديد (اختصار F1)"
+          >
+            <Plus className="w-3.5 h-3.5 text-white stroke-[3]" />
+            <span>منتج جديد</span>
+            <span className="text-[10px] bg-black/25 px-1 py-0.2 rounded font-mono">F1</span>
+          </button>
+
+          <button
             onClick={() => setIsPriceCheckOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded text-xs font-black transition-all shadow-sm cursor-pointer"
             title="معرفة السعر (اختصار F2)"
@@ -664,6 +898,32 @@ export const POSScreen: React.FC = () => {
             <Tag className="w-3.5 h-3.5 text-slate-900 stroke-[2.5]" />
             <span>معرفة السعر</span>
             <span className="text-[10px] bg-slate-900/20 px-1 py-0.2 rounded font-mono">F2</span>
+          </button>
+
+          <button
+            onClick={handleOpenPackModal}
+            className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-black transition-all shadow-sm cursor-pointer"
+            title="إضافة حزمة أو بيع بالكرتون (Colisage)"
+          >
+            <Package className="w-3.5 h-3.5 text-indigo-200" />
+            <span>إضافة حزمة</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setCustomMode('new');
+              setCustomPriceInput('');
+              setCustomNameInput('سلعة غير مسجلة');
+              setCustomQtyInput('1');
+              setCustomCostInput('');
+              setIsOtherModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded text-xs font-black transition-all shadow-sm cursor-pointer"
+            title="إضافة سعر غير مسجل لقائمة المبيعات (اختصار /)"
+          >
+            <Plus className="w-3.5 h-3.5 text-white" />
+            <span>سعر غير مسجل</span>
+            <span className="text-[10px] bg-black/25 px-1 py-0.2 rounded font-mono">/</span>
           </button>
 
           <button
@@ -713,11 +973,17 @@ export const POSScreen: React.FC = () => {
       <div className="flex-1 flex overflow-hidden p-2.5 gap-2.5">
         {/* Left Column (Zone 1): Waitlist, Function Keys, Print Options, Brand Screen */}
         <div className="w-[280px] flex flex-col gap-2 bg-[#d7dadf] p-2.5 rounded-lg border-2 border-[#b0b5bd] shadow-sm">
-          {/* 1. قائمة الإنتظار (Waitlist Box) */}
+          {/* 1. قائمة الإنتظار (Waitlist Box - F8) */}
           <div
             onClick={() => setIsQueueModalOpen(true)}
-            className="bg-white border-2 border-slate-300 hover:border-slate-400 rounded-lg p-2.5 flex flex-col items-center justify-center cursor-pointer shadow-xs transition-all hover:bg-slate-50 group"
+            title="انقر لفتح قائمة الإنتظار أو اضغط F8 لتعليق الزبون الحالي"
+            className="bg-white border-2 border-slate-300 hover:border-slate-400 rounded-lg p-2.5 flex flex-col items-center justify-center cursor-pointer shadow-xs transition-all hover:bg-slate-50 group relative"
           >
+            <div className="absolute top-2 left-2">
+              <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-black font-mono">
+                F8
+              </span>
+            </div>
             <div className="w-12 h-12 rounded-full border-2 border-slate-700 flex items-center justify-center mb-1 text-slate-800 group-hover:rotate-12 transition-transform">
               <Clock className="w-7 h-7 stroke-[2.2]" />
             </div>
@@ -725,10 +991,10 @@ export const POSScreen: React.FC = () => {
             <div className="text-[11px] font-bold text-slate-500 mt-0.5">
               {heldSales.length > 0 ? (
                 <span className="px-2 py-0.5 rounded-full bg-red-600 text-white font-bold animate-pulse">
-                  {heldSales.length} تذكرة معلقة
+                  {heldSales.length} زبون معلق
                 </span>
               ) : (
-                'لا توجد تذاكر معلقة (انقر للحفظ)'
+                'لا توجد تذاكر معلقة (F8 للتعليق)'
               )}
             </div>
           </div>
@@ -903,14 +1169,21 @@ export const POSScreen: React.FC = () => {
             <span className="text-[9px] font-mono font-bold bg-slate-900/20 px-1 rounded">F2</span>
           </button>
 
-          {/* اخرى [/] */}
+          {/* سعر غير مسجل [/] */}
           <button
-            onClick={() => setIsOtherModalOpen(true)}
-            title="أخرى: تعديل الكمية أو السعر المخصص"
-            className="h-12 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-400 rounded-md font-bold text-xs flex flex-col items-center justify-center shadow-xs active:translate-y-0.5"
+            onClick={() => {
+              setCustomMode('new');
+              setCustomPriceInput('');
+              setCustomNameInput('سلعة غير مسجلة');
+              setCustomQtyInput('1');
+              setCustomCostInput('');
+              setIsOtherModalOpen(true);
+            }}
+            title="إضافة سعر غير مسجل لقائمة المبيعات (اختصار /)"
+            className="h-13 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-400 rounded-md font-bold text-xs flex flex-col items-center justify-center shadow-xs active:translate-y-0.5 cursor-pointer"
           >
-            <span>أخرى</span>
-            <span className="text-[10px] text-slate-500 font-mono">[/]</span>
+            <span className="leading-tight text-slate-900 font-black">سعر غير مسجل</span>
+            <span className="text-[10px] text-red-600 font-mono font-black bg-red-50 px-1.5 py-0.2 rounded border border-red-200">[/]</span>
           </button>
 
           {/* ثلاجة / مجمدات */}
@@ -933,11 +1206,12 @@ export const POSScreen: React.FC = () => {
 
           {/* الحزمة (Pack) */}
           <button
-            onClick={() => setIsPackModalOpen(true)}
+            onClick={handleOpenPackModal}
             title="الحزمة: بيع بالكرتون أو العلبة"
-            className="h-12 bg-white hover:bg-slate-100 text-slate-900 border-2 border-slate-400 rounded-md font-black text-xs flex items-center justify-center shadow-xs active:translate-y-0.5"
+            className="h-12 bg-white hover:bg-indigo-50 text-indigo-950 border-2 border-indigo-300 hover:border-indigo-600 rounded-md font-black text-xs flex flex-col items-center justify-center shadow-xs active:translate-y-0.5 cursor-pointer"
           >
-            الحزمة
+            <Package className="w-4 h-4 text-indigo-600 mb-0.5" />
+            <span className="text-[10px]">الحزمة</span>
           </button>
 
           {/* ميزان (Scale) */}
@@ -949,14 +1223,14 @@ export const POSScreen: React.FC = () => {
             <Scale className="w-5 h-5 text-slate-800" />
           </button>
 
-          {/* تعليق الوصل */}
+          {/* تعليق الوصل (F8) */}
           <button
             onClick={handleHoldCurrentSale}
-            title="تعليق الوصل الحالي وحفظه في قائمة الإنتظار"
-            className="h-11 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-md font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs"
+            title="وضع الزبون الحالي على قائمة الإنتظار (اختصار F8)"
+            className="h-11 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-md font-bold text-[11px] flex items-center justify-center gap-1 shadow-xs cursor-pointer active:translate-y-0.5"
           >
-            <Clock className="w-3.5 h-3.5" />
-            <span>تعليق</span>
+            <Clock className="w-3.5 h-3.5 text-amber-700" />
+            <span className="font-black">تعليق (F8)</span>
           </button>
 
           {/* إلغاء الوصل */}
@@ -1355,10 +1629,14 @@ export const POSScreen: React.FC = () => {
           </div>
 
           {/* Quick status text & shortcut reminders */}
-          <div className="flex items-center gap-4 text-xs text-neutral-400">
+          <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
             <span className="bg-neutral-800 px-2.5 py-1 rounded font-mono-numbers border border-neutral-700">
-              <strong className="text-white">(F4)</strong> تأكيد | <strong className="text-white">(F5)</strong> طباعة |{' '}
-              <strong className="text-white">(F6)</strong> كريدي | <strong className="text-white">(F7)</strong> كاش
+              <strong className="text-emerald-400">(F1)</strong> إضافة منتج | <strong className="text-white">(F4)</strong> تأكيد |{' '}
+              <strong className="text-white">(F5)</strong> طباعة | <strong className="text-white">(F6)</strong> كريدي |{' '}
+              <strong className="text-white">(F7)</strong> كاش
+            </span>
+            <span className="bg-neutral-800 px-2.5 py-1 rounded font-mono-numbers border border-neutral-700">
+              <strong className="text-amber-400">(/)</strong> سعر غير مسجل | <strong className="text-amber-400">(F8)</strong> قائمة الإنتظار
             </span>
           </div>
         </div>
@@ -1501,116 +1779,473 @@ export const POSScreen: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Modal: الحزمة (Pack / Colisage) */}
+      {/* 3. Modal: إضافة وبيع بالحزمة / الكرتون (Pack / Colisage) */}
       {isPackModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-slate-300 max-w-sm w-full overflow-hidden text-slate-800">
-            <div className="bg-[#1e2023] p-3 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
+          <div className="bg-white rounded-xl shadow-2xl border-2 border-slate-400 max-w-xl w-full overflow-hidden text-slate-800 flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1c1e22] via-[#2a2d34] to-[#1c1e22] p-3 text-white flex items-center justify-between border-b border-neutral-700">
               <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm">بيع بالحزمة / الكرتون (Colisage)</h3>
+                <div className="w-8 h-8 rounded-lg bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center">
+                  <Package className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">إضافة وبيع بالحزمة / الكرتون (Vente par Colis / Pack)</h3>
+                  <p className="text-[11px] text-neutral-400">تحديد عدد الكراتين، عدد القطع وسعر بيع الحزمة بالجملة أو التجزئة</p>
+                </div>
               </div>
-              <button onClick={() => setIsPackModalOpen(false)} className="text-neutral-400 hover:text-white">
+              <button
+                onClick={() => setIsPackModalOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">عدد القطع في الحزمة الواحدة:</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={packQuantity}
-                  onChange={e => setPackQuantity(Number(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-slate-50 border-2 border-slate-300 rounded font-mono-numbers font-black text-xl text-center focus:border-red-600 focus:outline-none"
-                  autoFocus
-                />
+            <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
+              {/* اختيار طريقة التطبيق (إذا كان هناك صنف محدد في الجدول) */}
+              {selectedRowIndex !== null && cart[selectedRowIndex] && (
+                <div className="flex rounded-lg bg-slate-100 p-1 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setPackApplyMode('update_selected')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      packApplyMode === 'update_selected'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    تطبيق على الصنف المحدد ({cart[selectedRowIndex].productName})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPackApplyMode('new_item')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                      packApplyMode === 'new_item'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    إضافة صنف حزمة جديد للسلة
+                  </button>
+                </div>
+              )}
+
+              {/* اختيار السلعة (Product Selection & Search) */}
+              <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <span>اختيار السلعة من الكتالوج:</span>
+                  </label>
+                  {currentPackProduct && (
+                    <span className="text-[11px] font-mono-numbers text-slate-500">
+                      المخزون المتوفر: <strong className="text-slate-800">{currentPackProduct.currentStock} {currentPackProduct.unit}</strong>
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute right-2.5 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={packProductSearch}
+                    onChange={e => setPackProductSearch(e.target.value)}
+                    placeholder="ابحث بالاسم، الباركود، باركود الكرتون..."
+                    className="w-full pl-3 pr-8 py-1.5 bg-white border border-slate-300 rounded text-xs focus:border-indigo-600 focus:outline-none"
+                  />
+                </div>
+
+                {/* Dropdown / Selection List */}
+                <div className="max-h-28 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded bg-white text-xs">
+                  {packFilteredProducts.length === 0 ? (
+                    <div className="p-3 text-center text-slate-400">لا توجد أصناف مطابقة للبحث</div>
+                  ) : (
+                    packFilteredProducts.map(p => {
+                      const isSelected = p.id === packSelectedProductId;
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => handleSelectProductForPack(p)}
+                          className={`p-2 flex items-center justify-between cursor-pointer transition-colors ${
+                            isSelected ? 'bg-indigo-50 font-bold text-indigo-900 border-r-4 border-indigo-600' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="truncate">{p.name}</span>
+                            {p.hasBoxPack && (
+                              <span className="text-[10px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-mono">
+                                كرتون ({p.boxQuantity || 12} ق)
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 font-mono-numbers text-[11px]">
+                            <span className="text-slate-500">مفرد: {formatCurrency(p.sellPrice)}</span>
+                            {p.wholesalePrice ? <span className="text-blue-600">جملة: {formatCurrency(p.wholesalePrice)}</span> : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-1.5">
-                {[6, 12, 24, 48].map(cnt => (
-                  <button
-                    key={cnt}
-                    onClick={() => setPackQuantity(cnt)}
-                    className="py-1 bg-slate-100 hover:bg-slate-200 border rounded text-xs font-mono-numbers font-bold"
-                  >
-                    حزمة {cnt}
-                  </button>
-                ))}
+              {/* Grid: عدد الحزم + عدد القطع بالحزمة + سعر الحزمة */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1. عدد الحزم / الكراتين */}
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    عدد الحزم (الكراتين):
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPackNumberOfPacks(Math.max(1, packNumberOfPacks - 1))}
+                      className="w-8 h-8 bg-white border border-slate-300 hover:bg-slate-100 rounded font-bold text-slate-700 flex items-center justify-center cursor-pointer"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      value={packNumberOfPacks}
+                      onChange={e => setPackNumberOfPacks(Math.max(1, Number(e.target.value) || 1))}
+                      className="flex-1 h-8 bg-white border border-slate-300 rounded font-mono-numbers font-black text-center text-sm focus:border-indigo-600 focus:outline-none text-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPackNumberOfPacks(packNumberOfPacks + 1)}
+                      className="w-8 h-8 bg-white border border-slate-300 hover:bg-slate-100 rounded font-bold text-slate-700 flex items-center justify-center cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {/* Quick pills */}
+                  <div className="grid grid-cols-4 gap-1 pt-1">
+                    {[1, 2, 3, 5].map(cnt => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setPackNumberOfPacks(cnt)}
+                        className={`py-0.5 text-[11px] font-mono-numbers font-bold rounded border cursor-pointer ${
+                          packNumberOfPacks === cnt ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        {cnt} حزمة
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. عدد القطع في الحزمة الواحدة */}
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    عدد القطع بالحزمة:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={packUnitsPerPack}
+                    onChange={e => {
+                      const val = Math.max(1, Number(e.target.value) || 1);
+                      setPackUnitsPerPack(val);
+                      if (currentPackProduct) {
+                        const base = currentPackProduct.wholesalePrice || currentPackProduct.sellPrice;
+                        setPackCustomPrice(String(Number((val * base).toFixed(2))));
+                      }
+                    }}
+                    className="w-full h-8 px-2 bg-white border border-slate-300 rounded font-mono-numbers font-black text-center text-sm focus:border-indigo-600 focus:outline-none text-slate-900"
+                  />
+                  {/* Quick units */}
+                  <div className="grid grid-cols-4 gap-1 pt-1">
+                    {[6, 12, 24, 48].map(sz => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => {
+                          setPackUnitsPerPack(sz);
+                          if (currentPackProduct) {
+                            const base = currentPackProduct.wholesalePrice || currentPackProduct.sellPrice;
+                            setPackCustomPrice(String(Number((sz * base).toFixed(2))));
+                          }
+                        }}
+                        className={`py-0.5 text-[11px] font-mono-numbers font-bold rounded border cursor-pointer ${
+                          packUnitsPerPack === sz ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        {sz} قطعة
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. سعر بيع الحزمة الواحدة */}
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    سعر الحزمة الواحدة (د.ج):
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={packCustomPrice}
+                    onChange={e => setPackCustomPrice(e.target.value)}
+                    placeholder="سعر الحزمة..."
+                    className="w-full h-8 px-2 bg-white border border-slate-300 rounded font-mono-numbers font-black text-center text-sm focus:border-indigo-600 focus:outline-none text-indigo-900"
+                  />
+                  {/* Recalculate options */}
+                  <div className="grid grid-cols-2 gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentPackProduct) {
+                          setPackCustomPrice(String(Number((packUnitsPerPack * currentPackProduct.sellPrice).toFixed(2))));
+                        }
+                      }}
+                      className="py-0.5 text-[10px] bg-white hover:bg-slate-100 border border-slate-200 rounded font-bold text-slate-700 cursor-pointer"
+                      title="حساب حسب سعر التجزئة العادي"
+                    >
+                      تجزئة ({formatCurrency(currentPackProduct?.sellPrice || 0)})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentPackProduct) {
+                          const wPrice = currentPackProduct.wholesalePrice || currentPackProduct.sellPrice;
+                          setPackCustomPrice(String(Number((packUnitsPerPack * wPrice).toFixed(2))));
+                        }
+                      }}
+                      className="py-0.5 text-[10px] bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded font-bold text-indigo-700 cursor-pointer"
+                      title="حساب حسب سعر الجملة"
+                    >
+                      جملة ({formatCurrency(currentPackProduct?.wholesalePrice || currentPackProduct?.sellPrice || 0)})
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ملخص احتساب الحزمة المباشر */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-3 rounded-lg border border-amber-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">إجمالي القطع:</span>
+                    <strong className="font-mono-numbers text-sm text-slate-900">
+                      {packNumberOfPacks} حزم × {packUnitsPerPack} = {packNumberOfPacks * packUnitsPerPack} قطعة
+                    </strong>
+                  </div>
+                  <div className="border-r border-amber-200 pr-3">
+                    <span className="text-slate-500 block text-[11px]">سعر القطعة داخل الحزمة:</span>
+                    <strong className="font-mono-numbers text-sm text-indigo-800">
+                      {formatCurrency(
+                        packUnitsPerPack > 0
+                          ? Number(((parseFloat(packCustomPrice) || 0) / packUnitsPerPack).toFixed(2))
+                          : 0
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="text-left">
+                  <span className="text-slate-500 block text-[11px]">المبلغ الإجمالي للحزمة:</span>
+                  <strong className="font-mono-numbers text-lg font-black text-red-600">
+                    {formatCurrency(Number(((parseFloat(packCustomPrice) || 0) * packNumberOfPacks).toFixed(2)))}
+                  </strong>
+                </div>
               </div>
             </div>
 
-            <div className="p-3 bg-slate-100 border-t flex justify-end gap-2">
+            {/* Footer */}
+            <div className="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setIsPackModalOpen(false)}
-                className="px-3 py-1.5 bg-slate-200 text-slate-700 font-bold text-xs rounded"
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
               >
                 إلغاء
               </button>
               <button
-                onClick={handleApplyPackQuantity}
-                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded"
+                type="button"
+                onClick={handleConfirmPackSale}
+                className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black text-xs rounded-lg flex items-center gap-2 shadow-md transition-all cursor-pointer"
               >
-                تطبيق الحزمة
+                <Package className="w-4 h-4" />
+                <span>إضافة الحزمة للمبيعات</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 4. Modal: أخرى (Other / Custom Qty & Price) */}
+      {/* 4. Modal: سعر غير مسجل [/] (Unrecorded Price / Prix Libre) */}
       {isOtherModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-slate-300 max-w-sm w-full overflow-hidden text-slate-800">
-            <div className="bg-[#1e2023] p-3 text-white flex items-center justify-between">
-              <h3 className="font-bold text-sm">تعديل الكمية والسعر المخصص [/]</h3>
-              <button onClick={() => setIsOtherModalOpen(false)} className="text-neutral-400 hover:text-white">
+          <div className="bg-white rounded-xl shadow-2xl border-2 border-slate-300 max-w-md w-full overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1e2023] to-[#2d3036] p-3 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center font-black text-sm">
+                  /
+                </div>
+                <div>
+                  <h3 className="font-black text-sm">إضافة سعر غير مسجل لقائمة المبيعات</h3>
+                  <p className="text-[11px] text-neutral-300 font-mono">اختصار لوحة المفاتيح: [/] أو Numpad /</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsOtherModalOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded hover:bg-white/10 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <form onSubmit={handleApplyCustomOther} className="p-4 space-y-3.5">
+              {/* If cart has selected row, offer toggle between adding new vs editing existing */}
+              {selectedRowIndex !== null && cart[selectedRowIndex] && (
+                <div className="flex rounded-lg bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setCustomMode('new')}
+                    className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
+                      customMode === 'new'
+                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    + إضافة صنف جديد بسعر حر
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomMode('edit');
+                      setCustomPriceInput(String(cart[selectedRowIndex].unitPrice));
+                      setCustomQtyInput(String(cart[selectedRowIndex].quantity));
+                    }}
+                    className={`flex-1 py-1.5 rounded-md transition-all cursor-pointer ${
+                      customMode === 'edit'
+                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    ✎ تعديل المحدد ({cart[selectedRowIndex].productName.slice(0, 14)}...)
+                  </button>
+                </div>
+              )}
+
+              {/* Price Input: Big, Bold & AutoFocus */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">الكمية الجديدة:</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={customQtyInput}
-                  onChange={e => setCustomQtyInput(e.target.value)}
-                  placeholder={selectedRowIndex !== null && cart[selectedRowIndex] ? String(cart[selectedRowIndex].quantity) : '1'}
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded font-mono-numbers font-bold text-sm"
-                  autoFocus
-                />
+                <label className="text-xs font-black text-slate-800 flex items-center justify-between mb-1">
+                  <span>سعر البيع (د.ج) * :</span>
+                  <span className="text-[11px] text-red-600 font-mono font-bold">Prix de vente</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    value={customPriceInput}
+                    onChange={e => setCustomPriceInput(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-12 pr-4 py-2.5 bg-amber-50/50 border-2 border-amber-400 focus:border-red-600 rounded-lg font-mono-numbers font-black text-xl text-slate-900 focus:outline-none shadow-inner"
+                    autoFocus
+                  />
+                  <span className="absolute left-3 top-3 text-xs font-black text-slate-500 font-mono">
+                    د.ج
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">سعر الوحدة المخصص (د.ج):</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={customPriceInput}
-                  onChange={e => setCustomPriceInput(e.target.value)}
-                  placeholder={selectedRowIndex !== null && cart[selectedRowIndex] ? String(cart[selectedRowIndex].unitPrice) : '0'}
-                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded font-mono-numbers font-bold text-sm"
-                />
-              </div>
-            </div>
+              {/* Preset Quick Price Buttons for speed */}
+              {customMode === 'new' && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-slate-500 font-bold ml-1">أسعار شائعة:</span>
+                  {[50, 100, 150, 200, 250, 500, 1000].map(amt => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCustomPriceInput(String(amt))}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-amber-100 border border-slate-300 hover:border-amber-400 rounded text-[11px] font-mono-numbers font-bold text-slate-800 cursor-pointer"
+                    >
+                      {amt}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            <div className="p-3 bg-slate-100 border-t flex justify-end gap-2">
-              <button
-                onClick={() => setIsOtherModalOpen(false)}
-                className="px-3 py-1.5 bg-slate-200 text-slate-700 font-bold text-xs rounded"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={handleApplyCustomOther}
-                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded"
-              >
-                حفظ التعديل
-              </button>
-            </div>
+              {/* Quantity Input */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    الكمية:
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.001"
+                    value={customQtyInput}
+                    onChange={e => setCustomQtyInput(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md font-mono-numbers font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+
+                {customMode === 'new' ? (
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                      سعر التكلفة (اختياري):
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={customCostInput}
+                      onChange={e => setCustomCostInput(e.target.value)}
+                      placeholder="لحساب الأرباح"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md font-mono-numbers font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-500"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Item Name / Description (when adding new) */}
+              {customMode === 'new' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    اسم السلعة أو الوصف:
+                  </label>
+                  <input
+                    type="text"
+                    value={customNameInput}
+                    onChange={e => setCustomNameInput(e.target.value)}
+                    placeholder="مثال: سلعة غير مسجلة، خضر، خبز..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md font-bold text-sm text-slate-900 focus:outline-none focus:border-slate-500"
+                  />
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="pt-2 flex items-center justify-between border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsOtherModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                >
+                  إلغاء [Esc]
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>
+                    {customMode === 'new'
+                      ? 'إضافة لقائمة المبيعات [Enter]'
+                      : 'حفظ التعديل [Enter]'}
+                  </span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

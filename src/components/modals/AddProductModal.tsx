@@ -24,6 +24,8 @@ export const AddProductModal: React.FC = () => {
   const {
     isAddProductOpen,
     setIsAddProductOpen,
+    productDraft,
+    setProductDraft,
     categories,
     products,
     refreshData,
@@ -73,10 +75,12 @@ export const AddProductModal: React.FC = () => {
   const [isScaleProduct, setIsScaleProduct] = useState(false);
   const [hasSizes, setHasSizes] = useState(false);
 
-  // Stock
+  // Stock & Pack
   const [currentStock, setCurrentStock] = useState<number>(0);
   const [hasBoxPack, setHasBoxPack] = useState(false);
   const [boxQuantity, setBoxQuantity] = useState<number>(1);
+  const [packPrice, setPackPrice] = useState<number>(0);
+  const [packBarcode, setPackBarcode] = useState<string>('');
   const [minStockAlert, setMinStockAlert] = useState<number>(0);
   const [storageLocation, setStorageLocation] = useState('');
 
@@ -99,11 +103,17 @@ export const AddProductModal: React.FC = () => {
       setCodeRef(code);
       const d = new Date();
       setCreationDate(`${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
-      if (barcodeList.length === 0) {
+      
+      if (productDraft?.barcode) {
+        setBarcodeList([productDraft.barcode]);
+        if (productDraft.name) {
+          setNameAr(productDraft.name);
+        }
+      } else if (barcodeList.length === 0) {
         setBarcodeList([code]);
       }
     }
-  }, [isAddProductOpen, products.length]);
+  }, [isAddProductOpen, products.length, productDraft]);
 
   if (!isAddProductOpen) return null;
 
@@ -161,6 +171,10 @@ export const AddProductModal: React.FC = () => {
         currentStock: !isStockable ? 9999 : (Number(currentStock) || 0),
         minStockAlert: Number(minStockAlert) || 0,
         unit: unit || 'قطعة',
+        hasBoxPack: hasBoxPack,
+        boxQuantity: hasBoxPack ? (Number(boxQuantity) || 1) : undefined,
+        packPrice: hasBoxPack && packPrice > 0 ? Number(packPrice) : undefined,
+        packBarcode: hasBoxPack && packBarcode.trim() ? packBarcode.trim() : undefined,
         location: storageLocation.trim() || undefined,
         expiryDate: expiryDate || undefined,
         imageUrl: imageUrl.trim() || undefined,
@@ -213,7 +227,8 @@ export const AddProductModal: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 text-white font-black text-sm tracking-wide">
-            <span>بطاقة السلعة</span>
+            <span>بطاقة السلعة / إضافة منتج جديد</span>
+            <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded font-mono text-amber-300">F1</span>
             <div className="p-1 border border-white/40 rounded-xs">
               <Package className="w-4 h-4 text-white" />
             </div>
@@ -809,10 +824,10 @@ export const AddProductModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* كمية في كرتون (Box/Pack quantity) */}
+                  {/* كمية في كرتون / حزمة (Box/Pack quantity) */}
                   <div className="grid grid-cols-12 gap-1 items-center">
                     <div className="col-span-9 flex items-center gap-1">
-                      <div className="w-4 h-4 border border-red-600 rounded-2xs flex items-center justify-center bg-white shrink-0">
+                      <div className="w-4 h-4 border border-red-600 rounded-2xs flex items-center justify-center bg-white shrink-0" title="تفعيل البيع بالحزمة / الكرتون">
                         <input
                           type="checkbox"
                           checked={hasBoxPack}
@@ -824,7 +839,14 @@ export const AddProductModal: React.FC = () => {
                         type="number"
                         min="1"
                         value={boxQuantity}
-                        onChange={e => setBoxQuantity(Number(e.target.value) || 1)}
+                        onChange={e => {
+                          const val = Number(e.target.value) || 1;
+                          setBoxQuantity(val);
+                          if (hasBoxPack && (!packPrice || packPrice === 0)) {
+                            const baseP = sellPriceT02 > 0 ? sellPriceT02 : sellPriceT01;
+                            if (baseP > 0) setPackPrice(Number((val * baseP).toFixed(2)));
+                          }
+                        }}
                         className="flex-1 bg-white border border-slate-400 rounded-xs px-2 py-1 font-mono-numbers font-black text-red-600 text-center text-xs focus:outline-none"
                       />
                     </div>
@@ -832,6 +854,64 @@ export const AddProductModal: React.FC = () => {
                       كمية في كرتون
                     </div>
                   </div>
+
+                  {/* حقول الحزمة المتقدمة (إذا تم تفعيلها) */}
+                  {hasBoxPack && (
+                    <>
+                      {/* سعر بيع الحزمة */}
+                      <div className="grid grid-cols-12 gap-1 items-center bg-amber-50/70 p-1 rounded border border-amber-200">
+                        <div className="col-span-9 flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={packPrice || ''}
+                            onChange={e => setPackPrice(Number(e.target.value) || 0)}
+                            placeholder={`${((boxQuantity || 1) * (sellPriceT01 || 0)).toFixed(2)} دج`}
+                            className="flex-1 bg-white border border-amber-400 rounded-xs px-2 py-1 font-mono-numbers font-black text-amber-900 text-center text-xs focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const base = sellPriceT02 > 0 ? sellPriceT02 : sellPriceT01;
+                              setPackPrice(Number(((boxQuantity || 1) * base).toFixed(2)));
+                            }}
+                            className="px-1.5 py-1 bg-amber-200 hover:bg-amber-300 text-[10px] font-bold text-amber-900 rounded cursor-pointer"
+                            title="حساب سعر الحزمة تلقائياً من سعر البيع"
+                          >
+                            حساب
+                          </button>
+                        </div>
+                        <div className="col-span-3 text-left font-bold text-amber-900 text-[11px]">
+                          سعر الحزمة
+                        </div>
+                      </div>
+
+                      {/* باركود الحزمة / الكرتون */}
+                      <div className="grid grid-cols-12 gap-1 items-center bg-amber-50/70 p-1 rounded border border-amber-200">
+                        <div className="col-span-9 flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={packBarcode}
+                            onChange={e => setPackBarcode(e.target.value)}
+                            placeholder="باركود الكرتون..."
+                            className="flex-1 bg-white border border-amber-400 rounded-xs px-2 py-1 font-mono-numbers font-bold text-slate-800 text-xs text-left focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPackBarcode('6139' + Math.floor(100000000 + Math.random() * 900000000))}
+                            className="px-1.5 py-1 bg-amber-200 hover:bg-amber-300 text-[10px] font-bold text-amber-900 rounded cursor-pointer"
+                            title="توليد باركود كرتون عشوائي"
+                          >
+                            توليد
+                          </button>
+                        </div>
+                        <div className="col-span-3 text-left font-bold text-amber-900 text-[11px]">
+                          باركود الحزمة
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* كمية التحذير (Alert Stock in Yellow Background) */}
                   <div className="grid grid-cols-12 gap-1 items-center">

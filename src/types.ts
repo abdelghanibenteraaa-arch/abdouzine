@@ -27,6 +27,10 @@ export interface Product {
   currentStock: number; // الكمية الحالية بالمخزن
   minStockAlert: number;// الحد الأدنى للتنبيه
   unit: string;         // وحدة القياس (قطعة، كرتون، كغ، إلخ)
+  hasBoxPack?: boolean;    // بيع بالحزمة / كرتون
+  boxQuantity?: number;   // كمية في الحزمة أو الكرتون (عدد القطع)
+  packPrice?: number;     // سعر بيع الحزمة (د.ج)
+  packBarcode?: string;   // باركود الحزمة الخاص
   expiryDate?: string;  // تاريخ الصلاحية
   location?: string;    // موقع التخزين (الرف / المستودع)
   imageUrl?: string;
@@ -157,6 +161,9 @@ export interface SaleItem {
   discount: number;
   total: number;
   profit: number;
+  isPack?: boolean;
+  packSize?: number;
+  numberOfPacks?: number;
 }
 
 export interface SaleInvoice {
